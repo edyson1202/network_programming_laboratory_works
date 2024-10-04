@@ -33,9 +33,9 @@ for product in soup.find_all('div', class_='product-block product-block-card hov
     product_info['price'] = product.find('span', class_='text-blue text-xl font-bold dark:text-white').text.strip()
     product_info['price'] = product_info['price'].replace(' ', '').replace('\n', '')
     # Product monthly payment
-    product_info['monthly_payment'] = product.find('span',
-                                                   class_='text-blue relative block text-sm font-normal dark:text-white').find(
-        'span').text.strip()
+    montly_payment = product.find('span',
+                                                   class_='text-blue relative block text-sm font-normal dark:text-white').find('span').text.strip()
+    product_info['monthly_payment'] = montly_payment if montly_payment.isdigit() else '-1 ' + montly_payment
 
     product_list.append(product_info)
 
