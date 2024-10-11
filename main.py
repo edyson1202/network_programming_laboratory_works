@@ -66,6 +66,39 @@ def dict_to_json(d):
     # Join all items into a JSON object string
     return '{' + ', '.join(items) + '}'
 
+def dict_to_custom(d):
+    # Handle the empty dictionary case
+    if not d:
+        return '{}'
+
+    items = []
+
+    for key, value in d.items():
+        # Convert the key to a JSON-compatible string
+        key_str = f'"{key}"'
+
+        # Convert the value based on its type
+        if isinstance(value, str):
+            value_str = f'"{value}"'
+        elif isinstance(value, (int, float, bool)):
+            value_str = str(value).lower() if isinstance(value, bool) else str(value)
+        elif value is None:
+            value_str = 'null'
+        elif isinstance(value, dict):
+            value_str = dict_to_custom(value)  # Recursively convert dictionaries
+        elif isinstance(value, list):
+            # Handle lists by converting each item
+            list_items = ', '.join(dict_to_custom({i: v}) for i, v in enumerate(value))
+            value_str = f'[{list_items}]'
+        else:
+            raise TypeError(f'Unsupported type: {type(value)}')
+
+        # Combine the key and value into a JSON string format
+        items.append(f'{key_str}- {value_str}')
+
+    # Join all items into a JSON object string
+    return '(' + ', '.join(items) + ')'
+
 def http_get(host, path):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -221,9 +254,14 @@ content['content'] = product_list
 
 json_string = dict_to_json(content)
 xml_string = dict_to_xml(content)
+custom_string = dict_to_custom(content)
+
+with open('output.txt', 'w', encoding='utf-8') as file:
+    file.write(json_string + '\n' + xml_string)
 
 print(json_string)
 print(xml_string)
+print(custom_string)
 
 #pprint(content)
 
