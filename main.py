@@ -1,3 +1,7 @@
+import ssl
+import functools
+from datetime import datetime
+
 import requests
 from bs4 import BeautifulSoup
 from pprint import pprint
@@ -5,11 +9,71 @@ import re
 
 import socket
 
-def http_get(host, path):
+def dict_to_xml(d, root_element="root"):
+    # Start with the root element
+    xml_string = f'<{root_element}>'
 
+    for key, value in d.items():
+        if isinstance(value, dict):
+            # Recursively convert dictionaries
+            xml_string += dict_to_xml(value, key)
+        elif isinstance(value, list):
+            # Handle lists by creating a separate element for each item
+            for item in value:
+                xml_string += f'<{key}>'
+                if isinstance(item, dict):
+                    xml_string += dict_to_xml(item, key)
+                else:
+                    xml_string += str(item)
+                xml_string += f'</{key}>'
+        else:
+            # Convert other types to string
+            xml_string += f'<{key}>{str(value)}</{key}>'
+
+    xml_string += f'</{root_element}>'
+    return xml_string
+
+def dict_to_json(d):
+    # Handle the empty dictionary case
+    if not d:
+        return '{}'
+
+    items = []
+
+    for key, value in d.items():
+        # Convert the key to a JSON-compatible string
+        key_str = f'"{key}"'
+
+        # Convert the value based on its type
+        if isinstance(value, str):
+            value_str = f'"{value}"'
+        elif isinstance(value, (int, float, bool)):
+            value_str = str(value).lower() if isinstance(value, bool) else str(value)
+        elif value is None:
+            value_str = 'null'
+        elif isinstance(value, dict):
+            value_str = dict_to_json(value)  # Recursively convert dictionaries
+        elif isinstance(value, list):
+            # Handle lists by converting each item
+            list_items = ', '.join(dict_to_json({i: v}) for i, v in enumerate(value))
+            value_str = f'[{list_items}]'
+        else:
+            raise TypeError(f'Unsupported type: {type(value)}')
+
+        # Combine the key and value into a JSON string format
+        items.append(f'{key_str}: {value_str}')
+
+    # Join all items into a JSON object string
+    return '{' + ', '.join(items) + '}'
+
+def http_get(host, path):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    sock.connect((host, 80))
+    context = ssl.create_default_context()
+
+    sock = context.wrap_socket(sock, server_hostname=host)
+
+    sock.connect((host, 443))
 
     # Prepare the HTTP GET request
     request = f"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
@@ -29,7 +93,12 @@ def http_get(host, path):
     sock.close()
 
     # Return the response
-    return response.decode()
+    response_text = response.decode()
+
+    headers, body = response_text.split("\r\n\r\n", 1)
+    print(headers)
+    return body
+
 
 def mdl_to_eur(data_dict) :
     exchange_rate = 1 / 20
@@ -54,18 +123,22 @@ path = "/search?search=casti+sony"
 host = "ultra.md"
 url = "http://ultra.md/search?search=casti+sony"
 
-# response = http_get(host, path)
-#
-# pprint(response)g
+soup = ""
+useSocket = True;
+if useSocket :
+    response = http_get(host, path)
+    soup = BeautifulSoup(response, 'html.parser')
+else :
+    response = requests.get(url)
+    if (response.status_code != 200):
+        print("something is wrong")
 
-response = requests.get(url)
+    soup = BeautifulSoup(response.content, 'html.parser')
 
-if (response.status_code != 200) :
-    print("something is wrong")
 
 ## 3. SCRAPE THE PRODUCT NAME, PRICE, URL, MONTHLY_PAYMENT, AND IMAGE_URL
 
-soup = BeautifulSoup(response.content, 'html.parser')
+
 
 product_list = []
 
@@ -124,7 +197,35 @@ product_list = list(map(mdl_to_eur, product_list))
 
 product_list = list(filter(filter_in_price_range, product_list))
 
-pprint(product_list)
+
+price_list = []
+
+for product in product_list :
+    price_list.append(float(product['price'].replace(' EUR', '')))
+
+print(price_list)
+
+# Use reduce to compute the product of list elements
+sum = functools.reduce(lambda x, y: x + y, price_list)
+print("Sum of list prices:", sum)
+
+sum_timestamp = {}
+
+sum_timestamp['prices_sum'] = sum
+sum_timestamp['utc_timestamp'] = str(datetime.utcnow())
+
+product_list.append(sum_timestamp)
+
+content = {}
+content['content'] = product_list
+
+json_string = dict_to_json(content)
+xml_string = dict_to_xml(content)
+
+print(json_string)
+print(xml_string)
+
+#pprint(content)
 
 
 
